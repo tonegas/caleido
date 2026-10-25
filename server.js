@@ -39,11 +39,14 @@ async function nowPlaying() {
     // don't launch the player if it's closed
     const running = await run('osascript', ['-e', `application "${app}" is running`]);
     if (running !== 'true') continue;
+    const t0 = Date.now() / 1000;
     const out = await run('osascript', ['-e', script]);
+    // the position is read near the end of the ~130 ms script: timestamp it there, not after
+    const at = Date.now() / 1000 - 0.25 * (Date.now() / 1000 - t0);
     if (!out) continue;
     const [title, artist, album, duration, position, state] = out.split('\n');
     const info = { source: app, title, artist, album, duration: num(duration), position: num(position),
-      playing: state === 'playing', at: Date.now() / 1000 };
+      playing: state === 'playing', at };
     if (info.playing) return info;
     paused = paused || info;
   }

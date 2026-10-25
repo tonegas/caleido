@@ -5,6 +5,16 @@
 const POLL_PLAYER = 2000;      // ms between two player reads
 const RECOGNIZE_EVERY = 45;    // s: recognize again to follow song changes / resync
 const RETRY_NO_MATCH = 5;      // s to wait after a failed attempt
+const LEAD = 0.5;              // s: show each line slightly early so people can read it in time
+const OFFSETS_KEY = 'caleido.karaokeOffsets';
+
+// per-song manual corrections, remembered in this browser
+function loadOffsets() {
+  try { return JSON.parse(localStorage.getItem(OFFSETS_KEY)) || {}; } catch { return {}; }
+}
+function saveOffsets(o) {
+  try { localStorage.setItem(OFFSETS_KEY, JSON.stringify(o)); } catch {}
+}
 
 export class Karaoke {
   constructor(el, say) {
@@ -54,14 +64,23 @@ export class Karaoke {
   }
 
   nudge(dt) {
-    this.offset += dt;
+    this.offset = Math.round((this.offset + dt) * 100) / 100;
+    if (this.song) {
+      const o = loadOffsets();
+      o[this._songKey()] = this.offset;
+      saveOffsets(o);
+    }
     this.say(`Karaoke: lyrics offset ${this.offset >= 0 ? '+' : ''}${this.offset.toFixed(2)} s`);
+  }
+
+  _songKey() {
+    return `${this.song.title}|${this.song.artist}`.toLowerCase();
   }
 
   // current position in the song, extrapolated between two reads
   position() {
     const now = Date.now() / 1000;
-    return this.pos0 + (this.playing ? now - this.at0 : 0) + this.offset;
+    return this.pos0 + (this.playing ? now - this.at0 : 0) + this.offset + LEAD;
   }
 
   async _poll() {
@@ -104,7 +123,7 @@ export class Karaoke {
     if (same) return;
     this.song = { title: info.title, artist: info.artist, album: info.album || '', duration: info.duration || 0, source };
     this.lyrics = null;
-    this.offset = 0;
+    this.offset = loadOffsets()[this._songKey()] || 0;
     this._lastLine = -2;
     this._setStatus('Looking for the lyrics…');
     const q = new URLSearchParams({ title: info.title, artist: info.artist, album: info.album || '', duration: info.duration || '' });

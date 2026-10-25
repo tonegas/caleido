@@ -82,7 +82,9 @@ from [LRCLIB](https://lrclib.net) (a free database of time-stamped lyrics; needs
 shows them line by line over the visuals, filling in the current line as it is sung.
 
 - It stays in sync when you pause, skip ahead or change song.
-- If the lyrics run early or late (for example with Bluetooth speakers), fix it with `[` and `]`.
+- Lines appear half a second early, like on a real karaoke screen, so there's time to read them.
+- If the lyrics run early or late (for example with Bluetooth speakers, or when the lyrics come from
+  a different recording of the song), fix it with `[` and `]`: the correction is remembered for each song.
 - If a song only has unsynced lyrics, they scroll in proportion to the song's length.
 - The first time, macOS asks whether Terminal may control Spotify/Music: allow it.
 
