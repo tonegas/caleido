@@ -1,7 +1,7 @@
 {
   "name": "caleido",
   "version": "1.0.0",
-  "description": "Visualizzatore musicale psichedelico a tutto schermo per feste (stile Winamp/Milkdrop)",
+  "description": "Psychedelic full-screen music visualizer for parties (Winamp/Milkdrop style) with karaoke mode",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

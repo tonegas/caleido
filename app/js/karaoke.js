@@ -1,10 +1,10 @@
-// Modalità karaoke: capisce quale brano sta suonando (Spotify/Musica sul Mac, oppure
-// riconoscimento Shazam dal microfono), scarica il testo sincronizzato e lo mostra
-// a tempo sopra il visualizzatore.
+// Karaoke mode: finds out which song is playing (Spotify/Music on the Mac, or Shazam
+// recognition from the microphone), downloads the synced lyrics and shows them in time
+// on top of the visualizer.
 
-const POLL_PLAYER = 2000;      // ms tra due letture del player
-const RECOGNIZE_EVERY = 45;    // s: ri-riconosce per seguire i cambi brano / risincronizzare
-const RETRY_NO_MATCH = 5;      // s di pausa dopo un tentativo fallito
+const POLL_PLAYER = 2000;      // ms between two player reads
+const RECOGNIZE_EVERY = 45;    // s: recognize again to follow song changes / resync
+const RETRY_NO_MATCH = 5;      // s to wait after a failed attempt
 
 export class Karaoke {
   constructor(el, say) {
@@ -13,10 +13,10 @@ export class Karaoke {
     this.on = false;
     this.song = null;          // { title, artist, album, duration, source }
     this.lyrics = null;        // { synced: [{t,text}], plain }
-    this.pos0 = 0;             // posizione nel brano al tempo at0
+    this.pos0 = 0;             // position in the song at time at0
     this.at0 = 0;
     this.playing = false;
-    this.offset = 0;           // correzione manuale ([ e ])
+    this.offset = 0;           // manual correction ([ and ])
     this.status = '';
     this._lastLine = -2;
     this._busy = false;
@@ -42,7 +42,7 @@ export class Karaoke {
   start() {
     this.on = true;
     this.el.hidden = false;
-    this._setStatus('Cerco il brano in riproduzione…');
+    this._setStatus('Looking for the song that is playing…');
     this._poll();
     this._pollTimer = setInterval(() => this._poll(), POLL_PLAYER);
   }
@@ -55,10 +55,10 @@ export class Karaoke {
 
   nudge(dt) {
     this.offset += dt;
-    this.say(`Karaoke: anticipo testo ${this.offset >= 0 ? '+' : ''}${this.offset.toFixed(2)} s`);
+    this.say(`Karaoke: lyrics offset ${this.offset >= 0 ? '+' : ''}${this.offset.toFixed(2)} s`);
   }
 
-  // posizione corrente nel brano, estrapolata tra una lettura e l'altra
+  // current position in the song, extrapolated between two reads
   position() {
     const now = Date.now() / 1000;
     return this.pos0 + (this.playing ? now - this.at0 : 0) + this.offset;
@@ -71,7 +71,7 @@ export class Karaoke {
       const np = await fetch('/api/nowplaying').then(r => r.json()).catch(() => ({}));
       if (np.source && np.playing) {
         await this._setSong(np, np.source);
-        // la lettura arriva con un ritardo: usa il tempo misurato dal server
+        // the read arrives with some delay: use the time measured by the server
         this.pos0 = np.position; this.at0 = np.at; this.playing = true;
       } else if (!this.recognizeDisabled && Date.now() / 1000 >= this._nextRecognize) {
         await this._recognize();
@@ -82,7 +82,7 @@ export class Karaoke {
   }
 
   async _recognize() {
-    if (!this.song) this._setStatus('Ascolto la musica per riconoscere il brano…');
+    if (!this.song) this._setStatus('Listening to recognize the song…');
     const r = await fetch('/api/recognize').then(r => r.json()).catch(() => ({ ok: false, error: 'server' }));
     if (!this.on) return;
     if (r.ok) {
@@ -90,11 +90,11 @@ export class Karaoke {
       this.pos0 = r.offset; this.at0 = r.at; this.playing = true;
       this._nextRecognize = Date.now() / 1000 + RECOGNIZE_EVERY;
     } else if (r.fatal) {
-      // riconoscimento non disponibile su questo Mac: resta solo la lettura del player
+      // recognition not available on this Mac: only the player read is left
       this.recognizeDisabled = true;
-      if (!this.song) this._setStatus('Avvia la musica da Spotify o Musica sul Mac per vedere il testo');
+      if (!this.song) this._setStatus('Play music from Spotify or Music on the Mac to see the lyrics');
     } else {
-      if (!this.song) this._setStatus(`Brano non riconosciuto (${r.error}). Riprovo…`);
+      if (!this.song) this._setStatus(`Song not recognized (${r.error}). Retrying…`);
       this._nextRecognize = Date.now() / 1000 + RETRY_NO_MATCH;
     }
   }
@@ -106,14 +106,14 @@ export class Karaoke {
     this.lyrics = null;
     this.offset = 0;
     this._lastLine = -2;
-    this._setStatus('Cerco il testo…');
+    this._setStatus('Looking for the lyrics…');
     const q = new URLSearchParams({ title: info.title, artist: info.artist, album: info.album || '', duration: info.duration || '' });
     const l = await fetch(`/api/lyrics?${q}`).then(r => r.json()).catch(() => ({ found: false }));
-    if (this.song?.title !== info.title) return;   // nel frattempo è cambiato brano
+    if (this.song?.title !== info.title) return;   // the song changed in the meantime
     this.lyrics = l.found ? l : null;
     this.$('.k-head').textContent = `${info.title} — ${info.artist}  ·  ${source}`;
     this.say(`Karaoke: ${info.title} — ${info.artist}`);
-    if (!l.found) this._setStatus('Testo non trovato per questo brano');
+    if (!l.found) this._setStatus('No lyrics found for this song');
     else if (!l.synced) this._setStatus('');
     else this._setStatus('');
     this.$('.k-plain').textContent = l.found && !l.synced ? l.plain : '';
@@ -132,7 +132,7 @@ export class Karaoke {
     }
   }
 
-  // chiamata a ogni frame
+  // called every frame
   update() {
     if (!this.on || !this.lyrics || this.status) return;
     const pos = this.position();
@@ -150,12 +150,12 @@ export class Karaoke {
         const cur = this.$('.k-cur');
         cur.classList.remove('pop'); void cur.offsetWidth; cur.classList.add('pop');
       }
-      // riempimento progressivo della riga corrente
+      // progressive fill of the current line
       const t0 = i >= 0 ? L[i].t : 0, t1 = L[i + 1] ? L[i + 1].t : t0 + 4;
       const p = Math.min(1, Math.max(0, (pos - t0) / Math.max(0.5, Math.min(t1 - t0, 8) * 0.9)));
       this.$('.k-cur').style.setProperty('--p', `${(p * 100).toFixed(1)}%`);
     } else if (this.lyrics.plain && this.song.duration) {
-      // testo non sincronizzato: scorre in proporzione alla durata
+      // unsynced lyrics: scroll in proportion to the duration
       const box = this.$('.k-plain');
       const f = Math.min(1, Math.max(0, pos / this.song.duration));
       box.scrollTop = f * (box.scrollHeight - box.clientHeight);

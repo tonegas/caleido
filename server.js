@@ -1,9 +1,9 @@
-// Server locale minimale (nessuna dipendenza). localhost è un "contesto sicuro",
-// quindi il browser permette l'accesso al microfono.
-// API per la modalità karaoke:
-//   GET /api/nowplaying  -> brano in riproduzione su Spotify o Musica (titolo, posizione...)
-//   GET /api/recognize   -> riconosce il brano dal microfono con ShazamKit
-//   GET /api/lyrics?title=&artist=&album=&duration= -> testo sincronizzato da LRCLIB
+// Minimal local server (no dependencies). localhost is a "secure context",
+// so the browser allows microphone access.
+// Karaoke mode API:
+//   GET /api/nowplaying  -> song playing on Spotify or Music (title, position...)
+//   GET /api/recognize   -> recognizes the song from the microphone with ShazamKit
+//   GET /api/lyrics?title=&artist=&album=&duration= -> synced lyrics from LRCLIB
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -18,7 +18,7 @@ const run = (cmd, args, timeout = 5000) => new Promise(resolve => {
   execFile(cmd, args, { timeout }, (err, stdout) => resolve(err ? null : stdout.trim()));
 });
 
-// --- brano in riproduzione (AppleScript) ---------------------------------------
+// --- now playing (AppleScript) -------------------------------------------------
 const PLAYERS = {
   Spotify: `tell application "Spotify"
     if player state is stopped then return ""
@@ -31,12 +31,12 @@ const PLAYERS = {
     return (name of t) & "\n" & (artist of t) & "\n" & (album of t) & "\n" & (duration of t) & "\n" & player position & "\n" & (player state as string)
   end tell`,
 };
-const num = s => parseFloat(String(s).replace(',', '.'));   // AppleScript usa la virgola in locale italiano
+const num = s => parseFloat(String(s).replace(',', '.'));   // AppleScript uses a decimal comma in some locales
 
 async function nowPlaying() {
   let paused = null;
   for (const [app, script] of Object.entries(PLAYERS)) {
-    // non avvia il player se è chiuso
+    // don't launch the player if it's closed
     const running = await run('osascript', ['-e', `application "${app}" is running`]);
     if (running !== 'true') continue;
     const out = await run('osascript', ['-e', script]);
@@ -50,7 +50,7 @@ async function nowPlaying() {
   return paused || { source: null };
 }
 
-// --- riconoscimento ShazamKit ----------------------------------------------------
+// --- ShazamKit recognition --------------------------------------------------------
 const RECOGNIZER = path.join(__dirname, 'scripts', 'recognize');
 let recognizing = null;
 async function recognize() {
@@ -58,15 +58,15 @@ async function recognize() {
   recognizing = (async () => {
     if (!fs.existsSync(RECOGNIZER)) {
       const ok = await run('swiftc', ['-O', RECOGNIZER + '.swift', '-o', RECOGNIZER], 300000);
-      if (ok === null) return { ok: false, error: 'compilazione del riconoscitore fallita' };
+      if (ok === null) return { ok: false, error: 'failed to compile the recognizer' };
     }
     const out = await run(RECOGNIZER, ['12'], 20000);
-    try { return JSON.parse(out); } catch { return { ok: false, error: 'riconoscitore non disponibile' }; }
+    try { return JSON.parse(out); } catch { return { ok: false, error: 'recognizer not available' }; }
   })();
   try { return await recognizing; } finally { recognizing = null; }
 }
 
-// --- testi sincronizzati (LRCLIB) ------------------------------------------------
+// --- synced lyrics (LRCLIB) ------------------------------------------------------
 const lyricsCache = new Map();
 
 function getJSON(url) {
@@ -103,7 +103,7 @@ async function lyrics({ title = '', artist = '', album = '', duration = '' }) {
     if (exact?.syncedLyrics) best = exact;
   }
   if (!best) {
-    // ricerche sempre più tolleranti: titolo+artista, testo libero, solo titolo
+    // increasingly tolerant searches: title+artist, free text, title only
     let list = (await getJSON(`https://lrclib.net/api/search?${q}`)) || [];
     if (!list.length) list = (await getJSON(`https://lrclib.net/api/search?q=${encodeURIComponent(cleanTitle(title) + ' ' + cleanArtist(artist))}`)) || [];
     if (!list.length) {
@@ -145,4 +145,4 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
-}).listen(PORT, '127.0.0.1', () => console.log(`Caleido su http://localhost:${PORT}`));
+}).listen(PORT, '127.0.0.1', () => console.log(`Caleido running at http://localhost:${PORT}`));

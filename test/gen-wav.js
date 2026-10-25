@@ -1,4 +1,4 @@
-// Genera una traccia di test: cassa a 120 BPM, basso, hi-hat e accordi.
+// Generates a test track: 120 BPM kick, bass, hi-hats and chords.
 const fs = require('fs');
 const SR = 48000, SECS = +(process.argv[3] || 30), BPM = 120;
 const n = SR * SECS, buf = Buffer.alloc(44 + n * 2);

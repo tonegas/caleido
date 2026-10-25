@@ -41,14 +41,14 @@ function setScene(i) {
   state.scene = (i + SCENE_NAMES.length) % SCENE_NAMES.length;
   state.lastSceneChange = state.time;
   state.lastSceneBeat = audio.beatCount;
-  say(`Scena: ${SCENE_NAMES[state.scene]}`);
+  say(`Scene: ${SCENE_NAMES[state.scene]}`);
 }
 
 function setMode(mode) {
   if (mode === 'milkdrop') {
     if (!md) {
       md = new Milkdrop(mdCanvas, audio.ctx);
-      if (!md.available()) { say('Milkdrop non disponibile'); md = null; return; }
+      if (!md.available()) { say('Milkdrop not available'); md = null; return; }
       md.init(audio.source, viz.quality);
       state.presetName = md.names[md.index];
     }
@@ -58,7 +58,7 @@ function setMode(mode) {
   state.mode = mode;
   mdCanvas.hidden = mode !== 'milkdrop';
   canvas.hidden = mode === 'milkdrop';
-  say(mode === 'milkdrop' ? `Milkdrop: ${state.presetName}` : `Scena: ${SCENE_NAMES[state.scene]}`);
+  say(mode === 'milkdrop' ? `Milkdrop: ${state.presetName}` : `Scene: ${SCENE_NAMES[state.scene]}`);
 }
 
 function nextPreset() {
@@ -75,10 +75,10 @@ async function startAudio() {
     start.hidden = true;
     state.running = true;
     if (md) md.connect(audio.source);
-    say(`Microfono: ${label}`);
+    say(`Microphone: ${label}`);
   } catch (e) {
     start.hidden = false;
-    $('start-msg').textContent = `Microfono non disponibile (${e.name}). Clicca per riprovare e consenti l'accesso.`;
+    $('start-msg').textContent = `Microphone not available (${e.name}). Click to retry and allow access.`;
   }
 }
 
@@ -95,11 +95,11 @@ window.addEventListener('keydown', async e => {
   else if (k >= '1' && k <= String(SCENE_NAMES.length)) { if (state.mode !== 'shader') setMode('shader'); setScene(+k - 1); }
   else if (k === 'm' || k === 'M') setMode(state.mode === 'milkdrop' ? 'shader' : 'milkdrop');
   else if (k === 'n' || k === 'N') { if (state.mode !== 'milkdrop') setMode('milkdrop'); else nextPreset(); }
-  else if (k === 'a' || k === 'A') { state.auto = !state.auto; say(`Cambio automatico: ${state.auto ? 'ON' : 'OFF'}`); }
-  else if (k === 'b' || k === 'B') { state.flash = state.flash ? 0 : 1; say(`Flash sul beat: ${state.flash ? 'ON' : 'OFF'}`); }
-  else if (k === 'ArrowUp') { audio.sensitivity = Math.min(3, audio.sensitivity + 0.1); say(`Sensibilità: ${audio.sensitivity.toFixed(1)}`); }
-  else if (k === 'ArrowDown') { audio.sensitivity = Math.max(0.4, audio.sensitivity - 0.1); say(`Sensibilità: ${audio.sensitivity.toFixed(1)}`); }
-  else if (k === 'i' || k === 'I') { const l = await audio.nextInput(); if (md) md.connect(audio.source); say(`Ingresso: ${l}`); }
+  else if (k === 'a' || k === 'A') { state.auto = !state.auto; say(`Auto scene change: ${state.auto ? 'ON' : 'OFF'}`); }
+  else if (k === 'b' || k === 'B') { state.flash = state.flash ? 0 : 1; say(`Beat flash: ${state.flash ? 'ON' : 'OFF'}`); }
+  else if (k === 'ArrowUp') { audio.sensitivity = Math.min(3, audio.sensitivity + 0.1); say(`Sensitivity: ${audio.sensitivity.toFixed(1)}`); }
+  else if (k === 'ArrowDown') { audio.sensitivity = Math.max(0.4, audio.sensitivity - 0.1); say(`Sensitivity: ${audio.sensitivity.toFixed(1)}`); }
+  else if (k === 'i' || k === 'I') { const l = await audio.nextInput(); if (md) md.connect(audio.source); say(`Input: ${l}`); }
   else if (k === 'k' || k === 'K') say(`Karaoke: ${karaoke.toggle() ? 'ON' : 'OFF'}`);
   else if (k === '[') karaoke.nudge(-0.25);
   else if (k === ']') karaoke.nudge(0.25);
@@ -113,11 +113,11 @@ function setQuality(q, msg = true) {
   viz.quality = Math.round(Math.min(2, Math.max(1, q)) * 4) / 4;
   viz.resize();
   if (md) md.resize(viz.quality);
-  if (msg) say(`Qualità: ${viz.quality}x`);
+  if (msg) say(`Quality: ${viz.quality}x`);
 }
 window.addEventListener('resize', () => setQuality(viz.quality, false));
 
-// nasconde il cursore quando il mouse è fermo
+// hide the cursor while the mouse is idle
 let cursorTimer;
 window.addEventListener('mousemove', () => {
   document.body.classList.remove('nocursor');
@@ -125,7 +125,7 @@ window.addEventListener('mousemove', () => {
   cursorTimer = setTimeout(() => document.body.classList.add('nocursor'), 2000);
 });
 
-// evita che lo schermo si spenga durante la festa
+// keep the screen awake during the party
 async function keepAwake() {
   try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch {}
 }
@@ -133,7 +133,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) keep
 keepAwake();
 
 let last = performance.now(), fpsAcc = 0, fpsN = 0, hudTimer = 0;
-// qualità adattiva: se per 3 s si scende sotto 50 fps riduce la risoluzione interna
+// adaptive quality: below 50 fps for 3 s lowers the internal resolution
 let autoQuality = true, slowTime = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -148,7 +148,7 @@ function frame(now) {
   state.time += dt * (0.7 + 0.6 * audio.level);
   state.bass = audio.bass; state.mid = audio.mid; state.treble = audio.treble;
   state.level = audio.level; state.beat = audio.beat;
-  // i colori derivano verso suoni più "brillanti" e saltano sul beat
+  // colors drift with the "brightness" of the sound and jump on every beat
   state.hue = (state.hue + dt * (0.015 + 0.12 * audio.centroid) + (newBeat ? 0.04 + 0.08 * audio.bass : 0)) % 1;
 
   if (newBeat && audio.beatCount - state.lastSymBeat >= 8) {
@@ -181,9 +181,9 @@ function frame(now) {
     hudTimer = 0;
     const bar = v => '█'.repeat(Math.round(v * 10)).padEnd(10, '·');
     hud.textContent =
-      `${state.mode === 'milkdrop' ? 'Milkdrop: ' + state.presetName : 'Scena: ' + SCENE_NAMES[state.scene]}  ` +
-      `| simmetria ${state.sym} | ${audio.bpm || '--'} BPM | ${state.fps.toFixed(0)} fps ${viz.quality}x | auto ${state.auto ? 'on' : 'off'}\n` +
-      `bassi  ${bar(audio.bass)}  medi ${bar(audio.mid)}  acuti ${bar(audio.treble)}  volume ${bar(audio.level)}  ` +
+      `${state.mode === 'milkdrop' ? 'Milkdrop: ' + state.presetName : 'Scene: ' + SCENE_NAMES[state.scene]}  ` +
+      `| symmetry ${state.sym} | ${audio.bpm || '--'} BPM | ${state.fps.toFixed(0)} fps ${viz.quality}x | auto ${state.auto ? 'on' : 'off'}\n` +
+      `bass  ${bar(audio.bass)}  mid ${bar(audio.mid)}  treble ${bar(audio.treble)}  volume ${bar(audio.level)}  ` +
       `${audio.beat > 0.5 ? '● BEAT' : ''}`;
   }
   requestAnimationFrame(frame);
@@ -191,4 +191,4 @@ function frame(now) {
 
 startAudio();
 requestAnimationFrame(frame);
-setTimeout(() => say('Premi H per i comandi'), 3500);
+setTimeout(() => say('Press H for controls'), 3500);

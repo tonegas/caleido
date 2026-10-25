@@ -1,8 +1,8 @@
-// Riconosce la canzone che sta suonando nella stanza con ShazamKit (incluso in macOS).
-// Ascolta il microfono per al massimo N secondi e stampa una riga JSON:
-//   {"ok":true,"title":..,"artist":..,"offset":<secondi nel brano>,"at":<unix time del campione>}
+// Recognizes the song playing in the room with ShazamKit (built into macOS).
+// Listens to the microphone for at most N seconds and prints one JSON line:
+//   {"ok":true,"title":..,"artist":..,"offset":<seconds into the song>,"at":<unix time of the sample>}
 //   {"ok":false,"error":..}
-// Compilato da server.js con: swiftc -O scripts/recognize.swift -o scripts/recognize
+// Compiled by server.js with: swiftc -O scripts/recognize.swift -o scripts/recognize
 import AVFoundation
 import Foundation
 import ShazamKit
@@ -11,7 +11,7 @@ final class Recognizer: NSObject, SHSessionDelegate {
   let session = SHSession()
   let engine = AVAudioEngine()
   var done = false
-  var peak: Float = 0      // volume massimo ascoltato (diagnostica: 0 = microfono muto/negato)
+  var peak: Float = 0      // loudest sample heard (diagnostics: 0 = mic muted/denied)
 
   func run(seconds: Double) {
     session.delegate = self
@@ -26,7 +26,7 @@ final class Recognizer: NSObject, SHSessionDelegate {
     do { try engine.start() } catch { finish(["ok": false, "error": "mic: \(error.localizedDescription)"]) }
     DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
       guard let self else { return }
-      self.finish(["ok": false, "error": self.peak < 0.0005 ? "microfono muto (permesso negato?)" : "nessuna corrispondenza", "peak": self.peak])
+      self.finish(["ok": false, "error": self.peak < 0.0005 ? "microphone silent (permission denied?)" : "no match", "peak": self.peak])
     }
   }
 
@@ -43,14 +43,14 @@ final class Recognizer: NSObject, SHSessionDelegate {
 
   func session(_ session: SHSession, didNotFindMatchFor signature: SHSignature, error: Error?) {
     guard let error = error as NSError?, error.domain == SHErrorDomain else { return }
-    // Apple consente il catalogo Shazam solo ad app firmate con un account sviluppatore
-    // che ha il servizio ShazamKit: senza, il server risponde 401 "Missing entitlements"
+    // Apple only allows the Shazam catalog for apps signed with a developer account
+    // that has the ShazamKit service: otherwise the server answers 401 "Missing entitlements"
     if "\(error.userInfo)".contains("Missing entitlements") {
-      finish(["ok": false, "error": "non-autorizzato", "fatal": true])
+      finish(["ok": false, "error": "not-authorized", "fatal": true])
     } else if error.code != SHError.Code.matchAttemptFailed.rawValue {
       finish(["ok": false, "error": "shazam: \(error.localizedDescription)"])
     }
-    // altrimenti continua ad ascoltare fino al timeout
+    // otherwise keep listening until the timeout
   }
 
   func finish(_ result: [String: Any]) {

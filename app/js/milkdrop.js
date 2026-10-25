@@ -1,5 +1,5 @@
-// Modalità "Milkdrop": il vero visualizzatore di Winamp (porting WebGL butterchurn)
-// con centinaia di preset storici. Librerie in app/vendor, nessuna rete richiesta.
+// "Milkdrop" mode: the real Winamp visualizer (butterchurn WebGL port)
+// with hundreds of classic presets. Libraries in app/vendor, no network needed.
 
 export class Milkdrop {
   constructor(canvas, audioCtx) {

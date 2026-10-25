@@ -1,4 +1,4 @@
-// Renderer WebGL2 con feedback ping-pong.
+// WebGL2 renderer with ping-pong feedback.
 import { VERT, FEEDBACK, DISPLAY } from './shaders.js';
 import { SPEC_BINS, WAVE_LEN } from './audio.js';
 
@@ -9,11 +9,11 @@ export class Visualizer {
   constructor(canvas) {
     this.canvas = canvas;
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: true });
-    if (!gl) throw new Error('WebGL2 non disponibile');
+    if (!gl) throw new Error('WebGL2 not available');
     this.gl = gl;
     this.halfFloat = !!gl.getExtension('EXT_color_buffer_float');
-    // pixel disegnati per pixel CSS: 2 = nitido anche su TV 1080p (supersampling),
-    // viene ridotto automaticamente se gli fps calano
+    // rendered pixels per CSS pixel: 2 = sharp even on a 1080p TV (supersampling),
+    // lowered automatically if the frame rate drops
     this.quality = 2;
 
     this.fb = this._program(FEEDBACK);
@@ -119,7 +119,7 @@ export class Visualizer {
     gl.bindTexture(gl.TEXTURE_2D, this.waveTex);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, WAVE_LEN, 1, gl.RED, gl.UNSIGNED_BYTE, audio.wave);
 
-    // pass 1: feedback (legge targets[cur], scrive targets[1-cur])
+    // pass 1: feedback (reads targets[cur], writes targets[1-cur])
     const src = this.targets[this.cur], dst = this.targets[1 - this.cur];
     gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
     gl.viewport(0, 0, this.w, this.h);
@@ -129,7 +129,7 @@ export class Visualizer {
     gl.bindTexture(gl.TEXTURE_2D, src.tex);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    // pass 2: a schermo
+    // pass 2: to the screen
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.useProgram(this.disp.p);

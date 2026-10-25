@@ -1,7 +1,7 @@
-// Shader GLSL. Pipeline:
-//  1) FEEDBACK: il frame precedente viene zoomato/ruotato/deformato (stile Milkdrop)
-//     e sopra si disegna la scena corrente -> scie psichedeliche.
-//  2) DISPLAY: correzione colore, flash sul beat, vignetta, dithering.
+// GLSL shaders. Pipeline:
+//  1) FEEDBACK: the previous frame is zoomed/rotated/warped (Milkdrop style)
+//     and the current scene is drawn on top -> psychedelic trails.
+//  2) DISPLAY: color grading, beat flash, vignette, dithering.
 
 export const VERT = `#version 300 es
 in vec2 aPos;
@@ -26,7 +26,7 @@ vec3 pal(float t) {
 vec3 pal2(float t) {
   return 0.5 + 0.5 * cos(TAU * (vec3(1.0, 0.7, 0.4) * t + vec3(0.0, 0.15, 0.20) + uHue));
 }
-// piega lo spazio in N spicchi speculari (caleidoscopio)
+// fold space into N mirrored slices (kaleidoscope)
 vec2 kaleido(vec2 p, float n, float spin) {
   float r = length(p), a = atan(p.y, p.x) + spin;
   float seg = TAU / n;
@@ -35,10 +35,10 @@ vec2 kaleido(vec2 p, float n, float spin) {
 }
 `;
 
-// Ogni scena: zone radiali/angolari guidate dalla FREQUENZA (spettro),
-// zone centrali/globali guidate dall'AMPIEZZA (livello, bassi, beat).
+// Each scene: radial/angular zones driven by FREQUENCY (spectrum),
+// central/global zones driven by AMPLITUDE (level, bass, beat).
 const SCENES = `
-vec3 sceneMandala(vec2 p) {            // 0: caleidoscopio a celle
+vec3 sceneMandala(vec2 p) {            // 0: cell kaleidoscope
   vec2 k = kaleido(p, uSym, uTime * 0.08);
   float r = length(p);
   vec2 g = k * (5.0 + 2.0 * uMid) + vec2(uTime * 0.4, 0.0);
@@ -54,25 +54,25 @@ vec3 sceneMandala(vec2 p) {            // 0: caleidoscopio a celle
   return col;
 }
 
-vec3 sceneTunnel(vec2 p) {             // 1: tunnel a griglia di neon
+vec3 sceneTunnel(vec2 p) {             // 1: neon grid tunnel
   float r = length(p), a = atan(p.y, p.x);
-  float z = 0.4 / (r + 0.02) + uTime * (0.8 + 2.5 * uLevel);      // profondità
+  float z = 0.4 / (r + 0.02) + uTime * (0.8 + 2.5 * uLevel);      // depth
   float u = a / TAU * uSym * 2.0 + 0.3 * sin(z * 0.4 + uTime * 0.5);
   float fr = spec(fract(z * 0.05));
   vec2 g = vec2(u, z * 0.8);
   vec2 f = abs(fract(g) - 0.5);
-  float edge = min(0.5 - f.x, 0.5 - f.y);                         // distanza dal bordo cella
+  float edge = min(0.5 - f.x, 0.5 - f.y);                         // distance from the cell edge
   float aa = fwidth(edge) * 1.5;
   float line = 1.0 - smoothstep(0.02 + 0.05 * fr, 0.02 + 0.05 * fr + aa, edge);
   float checker = mod(floor(g.x) + floor(g.y), 2.0);
   vec3 col = pal(z * 0.05 + checker * 0.5 + fr * 0.3) * line * (0.6 + 2.0 * fr);
   col += pal2(z * 0.03) * checker * fr * 0.35;
-  col *= smoothstep(0.0, 0.2, r);                                 // nebbia al centro
+  col *= smoothstep(0.0, 0.2, r);                                 // fog in the center
   col += pal2(0.2) * smoothstep(0.1 + 0.1 * uBass, 0.0, r) * (0.3 + uBeat);
   return col;
 }
 
-vec3 scenePlasma(vec2 p) {             // 2: plasma speculare
+vec3 scenePlasma(vec2 p) {             // 2: mirrored plasma
   vec2 q = rot(uTime * 0.07) * abs(rot(uTime * 0.05) * p);
   q = abs(q);
   float t = uTime * (0.6 + 1.5 * uMid);
@@ -85,7 +85,7 @@ vec3 scenePlasma(vec2 p) {             // 2: plasma speculare
   return pal(v + uTreble * 0.4) * (0.2 + 1.2 * fr + 0.6 * uBeat) * bands;
 }
 
-vec3 sceneSpectrum(vec2 p) {           // 3: mandala dello spettro
+vec3 sceneSpectrum(vec2 p) {           // 3: spectrum mandala
   float r = length(p), a = atan(p.y, p.x) + uTime * 0.1;
   float seg = TAU / uSym;
   float am = abs(mod(a, seg) - seg * 0.5) / (seg * 0.5);
@@ -101,7 +101,7 @@ vec3 sceneSpectrum(vec2 p) {           // 3: mandala dello spettro
   return col;
 }
 
-vec3 sceneFractal(vec2 p) {            // 4: frattale kaliset (filamenti)
+vec3 sceneFractal(vec2 p) {            // 4: kaliset fractal (filaments)
   vec2 q = kaleido(rot(uTime * 0.04) * p, uSym, 0.0) * (1.6 - 0.4 * uBass);
   vec2 c = vec2(0.55 + 0.1 * sin(uTime * 0.13) + 0.08 * uBass, 0.45 + 0.08 * cos(uTime * 0.11) + 0.05 * uMid);
   vec3 col = vec3(0.0);
@@ -116,7 +116,7 @@ vec3 sceneFractal(vec2 p) {            // 4: frattale kaliset (filamenti)
   return col * 0.35;
 }
 
-vec3 sceneScope(vec2 p) {              // 5: oscilloscopio a stella
+vec3 sceneScope(vec2 p) {              // 5: star oscilloscope
   vec2 k = kaleido(p, uSym, uTime * 0.15);
   float x = k.x * 1.3;
   float w = wave(x) * (0.08 + 0.25 * uLevel);
@@ -139,15 +139,15 @@ vec3 scene(vec2 p) {
 }
 `;
 
-export const SCENE_NAMES = ['Mandala', 'Tunnel', 'Plasma', 'Spettro', 'Frattale', 'Oscilloscopio'];
+export const SCENE_NAMES = ['Mandala', 'Tunnel', 'Plasma', 'Spectrum', 'Fractal', 'Oscilloscope'];
 
 export const FEEDBACK = COMMON + SCENES + `
 void main() {
   float asp = uRes.x / uRes.y;
   vec2 p = vUv - 0.5; p.x *= asp;
 
-  // deformazione del frame precedente: zoom con i bassi, rotazione coi medi,
-  // ondulazione con gli acuti. Tutto scalato per uDt: stessa velocità a 60 o 120 fps.
+  // warp of the previous frame: zoom with the bass, rotation with the mids,
+  // ripples with the highs. Everything scaled by uDt: same speed at 60 or 120 fps.
   float zoom = exp(-uDt * (0.35 + 0.9 * uBass + 1.2 * uBeat));
   float spin = uDt * (0.15 + 0.6 * (uMid - 0.4) * sin(uTime * 0.2));
   vec2 q = rot(spin) * p * zoom;
@@ -155,14 +155,14 @@ void main() {
   q.x /= asp;
   vec2 uv = q + 0.5;
 
-  // 4 campioni sfalsati di mezzo pixel: le scie sfumano in modo continuo
-  // invece di lasciare copie "a gradini" (effetto grana)
+  // 4 samples offset by half a pixel: trails fade smoothly
+  // instead of leaving "stepped" copies (grainy look)
   vec2 px = 0.5 / uRes;
   vec3 prev = 0.25 * (texture(uPrev, uv + px).rgb + texture(uPrev, uv - px).rgb
                     + texture(uPrev, uv + vec2(px.x, -px.y)).rgb + texture(uPrev, uv + vec2(-px.x, px.y)).rgb);
 
-  // le scie ruotano lentamente di colore
-  // verso i bordi le scie sono più ingrandite (e morbide): svaniscono prima
+  // trails slowly shift color
+  // near the edges trails are magnified more (and softer): fade them faster
   float decay = exp(-uDt * (2.5 + 3.5 * uLevel + 5.0 * length(p)));
   prev = mix(prev, prev.gbr, uDt * (1.2 + 1.8 * uTreble)) * decay;
 
@@ -176,11 +176,11 @@ void main() {
   vec3 col = texture(uPrev, vUv).rgb;
   col *= 1.0 + 0.5 * uBeat * uFlash;
   float l = dot(col, vec3(0.299, 0.587, 0.114));
-  col = mix(vec3(l), col, 1.25);                 // più saturazione
-  col = col / (1.0 + 0.25 * col);                // tone map morbido
-  col *= 1.0 - 0.6 * pow(length(d) * 1.2, 2.5);  // vignetta
+  col = mix(vec3(l), col, 1.25);                 // more saturation
+  col = col / (1.0 + 0.25 * col);                // soft tone map
+  col *= 1.0 - 0.6 * pow(length(d) * 1.2, 2.5);  // vignette
   col = pow(max(col, 0.0), vec3(0.9));
-  // dithering: evita le fasce visibili nei gradienti scuri sulla TV
+  // dithering: avoids visible banding in dark gradients on the TV
   float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 61.0, vec2(12.9898, 78.233))) * 43758.5453);
   fragColor = vec4(col + (n - 0.5) / 255.0, 1.0);
 }`;

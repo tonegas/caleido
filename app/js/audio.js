@@ -1,6 +1,6 @@
-// Analisi audio dal microfono: spettro logaritmico, bande, livello, beat.
-// Tutti i valori sono normalizzati con un controllo automatico del guadagno (AGC),
-// così funziona sia con musica forte che con il suono ambientale lontano.
+// Microphone audio analysis: log spectrum, bands, level, beats.
+// Every value is normalized with automatic gain control (AGC), so it works
+// both with loud music and with distant ambient sound.
 
 export const SPEC_BINS = 256;
 export const WAVE_LEN = 512;
@@ -15,14 +15,14 @@ export class AudioEngine {
     this.stream = null;
     this.deviceId = null;
 
-    this.spectrum = new Uint8Array(SPEC_BINS);   // 0..255 per texture
+    this.spectrum = new Uint8Array(SPEC_BINS);   // 0..255 for the texture
     this.wave = new Uint8Array(WAVE_LEN);
     this.bass = 0; this.mid = 0; this.treble = 0; this.level = 0;
-    this.centroid = 0;          // 0..1, "brillantezza" del suono
-    this.beat = 0;              // impulso 1 -> 0 dopo ogni beat
+    this.centroid = 0;          // 0..1, "brightness" of the sound
+    this.beat = 0;              // pulse 1 -> 0 after every beat
     this.beatCount = 0;
     this.bpm = 0;
-    this.sensitivity = 1.0;     // regolabile con frecce su/giù
+    this.sensitivity = 1.0;     // adjustable with the up/down arrows
 
     this._topDb = -40;
     this._bandMax = [0.2, 0.2, 0.2, 0.2];
@@ -35,7 +35,7 @@ export class AudioEngine {
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (this.ctx.state === 'suspended') await this.ctx.resume();
     this.stop();
-    // Niente elaborazione vocale: cancellazione eco/rumore e AGC rovinano la musica.
+    // No voice processing: echo/noise cancellation and AGC ruin music.
     const audio = {
       echoCancellation: false, noiseSuppression: false, autoGainControl: false,
       channelCount: 1,
@@ -50,7 +50,7 @@ export class AudioEngine {
     this.analyser.minDecibels = -110;
     this.analyser.maxDecibels = -10;
     this.source.connect(this.analyser);
-    // uscita muta verso la destinazione: garantisce che il grafo audio venga elaborato
+    // muted output to the destination: makes sure the audio graph gets processed
     if (!this._mute) { this._mute = this.ctx.createGain(); this._mute.gain.value = 0; this._mute.connect(this.ctx.destination); }
     this.analyser.connect(this._mute);
     this._freq = new Float32Array(this.analyser.frequencyBinCount);
@@ -66,7 +66,7 @@ export class AudioEngine {
   }
 
   label() {
-    return this.stream?.getAudioTracks()[0]?.label || 'nessun ingresso';
+    return this.stream?.getAudioTracks()[0]?.label || 'no input';
   }
 
   async listInputs() {
@@ -81,7 +81,7 @@ export class AudioEngine {
     return this.start(ins[(i + 1) % ins.length].deviceId);
   }
 
-  // Mappa logaritmica 30 Hz .. 16 kHz -> SPEC_BINS bande.
+  // Logarithmic mapping 30 Hz .. 16 kHz -> SPEC_BINS bands.
   _buildBins() {
     const nyq = this.ctx.sampleRate / 2, n = this._freq.length;
     const f0 = 30, f1 = Math.min(16000, nyq);
@@ -105,20 +105,20 @@ export class AudioEngine {
     this.analyser.getFloatFrequencyData(this._freq);
     this.analyser.getFloatTimeDomainData(this._time);
 
-    // --- spettro con AGC in dB: la finestra [top-48, top] insegue il picco ---
+    // --- spectrum with AGC in dB: the [top-48, top] window follows the peak ---
     const db = new Float32Array(SPEC_BINS);
     let peak = -200;
     for (let i = 0; i < SPEC_BINS; i++) {
       let m = -200;
       for (let k = this._binLo[i]; k < this._binHi[i]; k++) if (this._freq[k] > m) m = this._freq[k];
-      // compensa la pendenza naturale della musica (gli acuti hanno meno energia)
+      // compensate the natural tilt of music (highs carry less energy)
       m += 3.0 * Math.log2(this._binFreq[i] / 200);
       db[i] = m;
       if (m > peak) peak = m;
     }
     if (peak > this._topDb) this._topDb += (peak - this._topDb) * Math.min(1, dt * 20);
-    else this._topDb -= dt * 4;                       // scende 4 dB/s
-    this._topDb = Math.max(this._topDb, -75 + 10 * (this.sensitivity - 1)); // non amplificare il silenzio
+    else this._topDb -= dt * 4;                       // falls 4 dB/s
+    this._topDb = Math.max(this._topDb, -75 + 10 * (this.sensitivity - 1)); // don't amplify silence
     const range = 48 / this.sensitivity, bottom = this._topDb - range;
 
     let bass = 0, mid = 0, tre = 0, nb = 0, nm = 0, nt = 0, cw = 0, cs = 0;
@@ -137,7 +137,7 @@ export class AudioEngine {
     bass /= nb || 1; mid /= nm || 1; tre /= nt || 1;
     const centroid = cw > 0 ? cs / cw / SPEC_BINS : 0;
 
-    // --- livello RMS + forma d'onda (allineata a un passaggio per lo zero) ---
+    // --- RMS level + waveform (aligned to a zero crossing) ---
     let rms = 0, amax = 1e-4;
     for (let i = 0; i < this._time.length; i++) {
       const s = this._time[i]; rms += s * s; if (Math.abs(s) > amax) amax = Math.abs(s);
@@ -147,7 +147,7 @@ export class AudioEngine {
     for (let i = 1; i < this._time.length - WAVE_LEN; i++) {
       if (this._time[i - 1] < 0 && this._time[i] >= 0) { z = i; break; }
     }
-    // passa-basso leggero: la forma d'onda del microfono è rumorosa e verrebbe seghettata
+    // light low-pass: the mic waveform is noisy and would look jagged
     const wg = 0.9 / amax, w = this._waveF || (this._waveF = new Float32Array(WAVE_LEN));
     for (let i = 0; i < WAVE_LEN; i++) w[i] = this._time[z + i];
     for (let pass = 0; pass < 3; pass++) {
@@ -156,7 +156,7 @@ export class AudioEngine {
     }
     for (let i = 0; i < WAVE_LEN; i++) this.wave[i] = clamp(128 + w[i] * wg * 127, 0, 255);
 
-    // --- AGC per banda: ogni valore relativo al proprio massimo recente ---
+    // --- per-band AGC: each value relative to its own recent maximum ---
     const raw = [bass, mid, tre, rms];
     const out = raw.map((v, i) => {
       this._bandMax[i] = Math.max(v, this._bandMax[i] * Math.exp(-dt * 0.25), i === 3 ? 0.002 : 0.02);
@@ -170,7 +170,7 @@ export class AudioEngine {
     this.level = follow(this.level, out[3]);
     this.centroid += (centroid - this.centroid) * Math.min(1, dt * 3);
 
-    // --- rilevamento beat sull'energia dei bassi ---
+    // --- beat detection on bass energy ---
     const h = this._bassHist;
     h.push(bass);
     while (h.length > 50) h.shift();

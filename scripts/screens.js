@@ -1,5 +1,5 @@
-// JXA: stampa "x y w h" (coordinate Chrome, origine in alto a sinistra) dello schermo
-// esterno se presente, altrimenti di quello principale.
+// JXA: prints "x y w h n" (Chrome coordinates, top-left origin) of the external
+// display if there is one, otherwise of the main display; n = number of displays.
 ObjC.import('AppKit');
 function run() {
   const screens = $.NSScreen.screens.js;
