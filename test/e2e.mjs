@@ -90,13 +90,14 @@ try {
   await page.keyboard.press('m');
   const t0 = Date.now() / 1000;
   const fake = Array.from({ length: 20 }, (_, i) => ({ t: i * 2, text: `Test line number ${i}` }));
+  let mockTitle = 'Test song';
   await page.setRequestInterception(true);
   page.on('request', r => {
     const u = r.url();
     if (u.includes('/api/nowplaying')) return r.respond({ contentType: 'application/json', body: JSON.stringify(
-      { source: 'Spotify', title: 'Test song', artist: 'Test', album: '', duration: 40, position: Date.now() / 1000 - t0, playing: true, at: Date.now() / 1000 }) });
+      { source: 'Spotify', title: mockTitle, artist: 'Test', album: '', duration: 40, position: Date.now() / 1000 - t0, playing: true, at: Date.now() / 1000 }) });
     if (u.includes('/api/lyrics')) return r.respond({ contentType: 'application/json', body: JSON.stringify(
-      { found: true, title: 'Test song', artist: 'Test', synced: fake, plain: null }) });
+      { found: true, title: mockTitle, artist: 'Test', synced: fake, plain: null }) });
     r.continue();
   });
   await page.keyboard.press('k');
@@ -111,6 +112,15 @@ try {
   check(k.on && k.cur === `Test line number ${expected}`, `karaoke: current line "${k.cur}" at ${k.pos.toFixed(1)} s`);
   check(k.next === `Test line number ${expected + 1}`, `karaoke: next line "${k.next}"`);
   check(k.p > 0 && k.p <= 100, `karaoke: progressive fill ${k.p}%`);
+  // the manual correction must reset when a new song starts
+  await page.keyboard.press(']');
+  await page.keyboard.press(']');
+  const before = await page.evaluate(() => window.__party.karaoke.offset);
+  mockTitle = 'Another test song';
+  await new Promise(r => setTimeout(r, 3000));
+  const after = await page.evaluate(() => [window.__party.karaoke.offset, window.__party.karaoke.song.title]);
+  check(before === 0.5 && after[0] === 0 && after[1] === 'Another test song',
+    `karaoke: offset ${before} s resets to ${after[0]} s on a new song`);
   check(errors.length === 0, `no JS errors in karaoke ${errors.join(' | ')}`);
 } finally {
   await browser.close();
