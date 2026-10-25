@@ -33,13 +33,22 @@ the old Winamp visualizers. It also has a karaoke mode that shows the song's lyr
 Caleido is a native Mac app (macOS 13 or later, Apple Silicon and Intel). Nothing else to install:
 no Node.js, no Chrome.
 
-1. Get `Caleido-<version>.dmg` (build it with `npm run build:mac`, see below).
+1. Download **`Caleido-<version>.dmg`** from the
+   [latest release](https://github.com/tonegas/caleido/releases/latest).
 2. Open the `.dmg` and drag **Caleido** into **Applications**.
 3. Open Caleido from Launchpad or Applications.
+4. The first time, allow access to the **microphone** (and, for karaoke, to **Spotify/Music**).
 
-The app isn't signed with an Apple Developer ID, so the first time macOS may refuse to open it.
-Go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (or run
-`xattr -dr com.apple.quarantine /Applications/Caleido.app` in Terminal).
+The app isn't signed with an Apple Developer ID, so the first time macOS blocks it ("Apple could not
+verify…"). Click **Done**, then go to **System Settings → Privacy & Security**, scroll down and
+click **Open Anyway**. Alternatively, run this once in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Caleido.app
+```
+
+To update, download the new `.dmg` and replace the app in Applications.
+To uninstall, move Caleido from Applications to the Trash.
 
 ## Getting started
 
