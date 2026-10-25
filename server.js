@@ -3,9 +3,8 @@
 // Karaoke mode API:
 //   GET /api/nowplaying  -> song playing on Spotify or Music (title, position...)
 //   GET /api/recognize   -> recognizes the song from the microphone with ShazamKit
-//   GET /api/lyrics?title=&artist=&album=&duration= -> synced lyrics from LRCLIB
+// (synced lyrics are fetched by the page itself, see app/js/lyrics.js)
 const http = require('http');
-const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
@@ -69,68 +68,10 @@ async function recognize() {
   try { return await recognizing; } finally { recognizing = null; }
 }
 
-// --- synced lyrics (LRCLIB) ------------------------------------------------------
-const lyricsCache = new Map();
-
-function getJSON(url) {
-  return new Promise(resolve => {
-    https.get(url, { headers: { 'User-Agent': 'Caleido (party visualizer)' }, timeout: 8000 }, res => {
-      let body = '';
-      res.on('data', c => body += c);
-      res.on('end', () => { try { resolve(res.statusCode === 200 ? JSON.parse(body) : null); } catch { resolve(null); } });
-    }).on('error', () => resolve(null)).on('timeout', function () { this.destroy(); });
-  });
-}
-
-// "Song - Remastered 2011", "Song (feat. X)" -> "Song"
-const cleanTitle = t => t.replace(/\s+-\s+.*$/, '').replace(/\s*[([](feat|ft|with|remaster|live|radio|version|edit)[^)\]]*[)\]]/gi, '').trim();
-const cleanArtist = a => a.split(/,|&| feat\.? | ft\.? /i)[0].trim();
-
-function parseLRC(lrc) {
-  const lines = [];
-  for (const row of lrc.split('\n')) {
-    const tags = [...row.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
-    const text = row.replace(/\[[^\]]*\]/g, '').trim();
-    for (const m of tags) lines.push({ t: +m[1] * 60 + +m[2], text });
-  }
-  return lines.sort((a, b) => a.t - b.t);
-}
-
-async function lyrics({ title = '', artist = '', album = '', duration = '' }) {
-  const key = `${title}|${artist}`.toLowerCase();
-  if (lyricsCache.has(key)) return lyricsCache.get(key);
-  const q = new URLSearchParams({ track_name: cleanTitle(title), artist_name: cleanArtist(artist) });
-  let best = null;
-  if (duration) {
-    const exact = await getJSON(`https://lrclib.net/api/get?${q}&album_name=${encodeURIComponent(album)}&duration=${Math.round(duration)}`);
-    if (exact?.syncedLyrics) best = exact;
-  }
-  if (!best) {
-    // increasingly tolerant searches: title+artist, free text, title only
-    let list = (await getJSON(`https://lrclib.net/api/search?${q}`)) || [];
-    if (!list.length) list = (await getJSON(`https://lrclib.net/api/search?q=${encodeURIComponent(cleanTitle(title) + ' ' + cleanArtist(artist))}`)) || [];
-    if (!list.length) {
-      const art = cleanArtist(artist).toLowerCase().split(/\s+/);
-      list = ((await getJSON(`https://lrclib.net/api/search?track_name=${encodeURIComponent(cleanTitle(title))}`)) || [])
-        .filter(r => art.some(w => w.length > 2 && r.artistName.toLowerCase().includes(w)));
-    }
-    const dur = +duration || 0;
-    const score = r => (r.syncedLyrics ? 0 : 1000) + (dur ? Math.abs(r.duration - dur) : 0);
-    best = list.sort((a, b) => score(a) - score(b))[0] || null;
-  }
-  const result = best
-    ? { found: true, title: best.trackName, artist: best.artistName,
-        synced: best.syncedLyrics ? parseLRC(best.syncedLyrics) : null, plain: best.plainLyrics || null }
-    : { found: false };
-  if (best || lyricsCache.size < 500) lyricsCache.set(key, result);
-  return result;
-}
-
 // --- HTTP ----------------------------------------------------------------------------
 const API = {
   '/api/nowplaying': nowPlaying,
   '/api/recognize': recognize,
-  '/api/lyrics': lyrics,
 };
 
 http.createServer(async (req, res) => {

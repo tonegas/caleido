@@ -96,8 +96,12 @@ try {
     const u = r.url();
     if (u.includes('/api/nowplaying')) return r.respond({ contentType: 'application/json', body: JSON.stringify(
       { source: 'Spotify', title: mockTitle, artist: 'Test', album: '', duration: 40, position: Date.now() / 1000 - t0, playing: true, at: Date.now() / 1000 }) });
-    if (u.includes('/api/lyrics')) return r.respond({ contentType: 'application/json', body: JSON.stringify(
-      { found: true, title: mockTitle, artist: 'Test', synced: fake, plain: null }) });
+    if (u.includes('lrclib.net/api/')) {
+      const lrc = fake.map(l => `[00:${String(l.t).padStart(2, '0')}.00] ${l.text}`).join('\n');
+      const rec = { trackName: mockTitle, artistName: 'Test', duration: 40, syncedLyrics: lrc, plainLyrics: null };
+      return r.respond({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify(u.includes('/api/get') ? rec : [rec]) });
+    }
     r.continue();
   });
   await page.keyboard.press('k');

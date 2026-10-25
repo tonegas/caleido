@@ -2,6 +2,8 @@
 // recognition from the microphone), downloads the synced lyrics and shows them in time
 // on top of the visualizer.
 
+import { findLyrics } from './lyrics.js';
+
 const POLL_PLAYER = 2000;      // ms between two player reads
 const RECOGNIZE_EVERY = 45;    // s: recognize again to follow song changes / resync
 const RETRY_NO_MATCH = 5;      // s to wait after a failed attempt
@@ -109,8 +111,7 @@ export class Karaoke {
     this.offset = 0;              // every new song starts without manual correction
     this._lastLine = -2;
     this._setStatus('Looking for the lyrics…');
-    const q = new URLSearchParams({ title: info.title, artist: info.artist, album: info.album || '', duration: info.duration || '' });
-    const l = await fetch(`/api/lyrics?${q}`).then(r => r.json()).catch(() => ({ found: false }));
+    const l = await findLyrics(info).catch(() => ({ found: false }));
     if (this.song?.title !== info.title) return;   // the song changed in the meantime
     this.lyrics = l.found ? l : null;
     this.$('.k-head').textContent = `${info.title} — ${info.artist}  ·  ${source}`;
