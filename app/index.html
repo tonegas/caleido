@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Caleido</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: #fff;
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  body.nocursor, body.nocursor * { cursor: none !important; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  canvas[hidden] { display: none; }
+  #hud { position: fixed; left: 16px; bottom: 14px; white-space: pre; font: 13px/1.5 ui-monospace, Menlo, monospace;
+    background: rgba(0,0,0,.45); padding: 8px 12px; border-radius: 8px; pointer-events: none; }
+  #toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); padding: 10px 18px;
+    background: rgba(0,0,0,.55); border-radius: 999px; font-size: 18px; opacity: 0; transition: opacity .4s;
+    pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; }
+  #help { position: fixed; right: 16px; top: 16px; background: rgba(0,0,0,.6); padding: 14px 18px;
+    border-radius: 10px; font-size: 14px; }
+  #help h2 { margin: 0 0 8px; font-size: 16px; }
+  #help kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 12px ui-monospace, Menlo, monospace;
+    background: rgba(255,255,255,.15); border-radius: 4px; padding: 1px 5px; margin-right: 6px; }
+  #help div { margin: 3px 0; }
+  #karaoke { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: flex-end;
+    align-items: center; padding: 0 6vw 9vh; pointer-events: none; text-align: center;
+    background: linear-gradient(to top, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 35%, transparent 60%); }
+  #karaoke[hidden] { display: none; }
+  .k-head { position: fixed; top: 3vh; left: 0; right: 0; font-size: 2.2vh; opacity: .8; text-shadow: 0 0 8px #000; }
+  .k-line { font-weight: 800; line-height: 1.2; text-shadow: 0 0 .25em #000, 0 0 .6em rgba(0,0,0,.8); min-height: 1.2em; }
+  .k-prev { font-size: 3.4vh; opacity: .45; }
+  .k-cur { font-size: 7.5vh; margin: 1.2vh 0; --p: 0%; }
+  .k-cur span { color: transparent; text-shadow: none; filter: drop-shadow(0 0 .12em #000) drop-shadow(0 0 .3em rgba(0,0,0,.9));
+    background: linear-gradient(90deg, #ffe14d 0%, #ff4fd8 var(--p), #fff var(--p), #fff 100%);
+    -webkit-background-clip: text; background-clip: text; }
+  .k-cur.pop { animation: kpop .35s ease-out; }
+  @keyframes kpop { from { transform: scale(.92); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+  .k-next { font-size: 4.2vh; opacity: .75; }
+  .k-next2 { font-size: 3.4vh; opacity: .45; }
+  .k-plain { position: fixed; top: 9vh; bottom: 9vh; left: 15vw; right: 15vw; overflow: hidden; white-space: pre-line;
+    font-size: 4vh; font-weight: 700; line-height: 1.5; text-shadow: 0 0 .3em #000; background: rgba(0,0,0,.35);
+    border-radius: 2vh; padding: 0 3vw; }
+  .k-plain[hidden] { display: none; }
+  #start { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.7); cursor: pointer; text-align: center; font-size: 22px; padding: 16px; }
+  #start[hidden] { display: none; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="md" hidden></canvas>
+<div id="hud" hidden></div>
+<div id="help" hidden>
+  <h2>Comandi</h2>
+  <div><kbd>F</kbd>schermo intero (o doppio click)</div>
+  <div><kbd>Spazio</kbd><kbd>→</kbd>scena / preset successivo</div>
+  <div><kbd>1</kbd>…<kbd>6</kbd>scegli scena</div>
+  <div><kbd>M</kbd>modalità Milkdrop (Winamp) on/off</div>
+  <div><kbd>N</kbd>preset Milkdrop successivo</div>
+  <div><kbd>K</kbd>karaoke on/off (testo a tempo)</div>
+  <div><kbd>[</kbd><kbd>]</kbd>testo karaoke prima / dopo</div>
+  <div><kbd>A</kbd>cambio automatico on/off</div>
+  <div><kbd>↑</kbd><kbd>↓</kbd>sensibilità microfono</div>
+  <div><kbd>I</kbd>cambia ingresso audio</div>
+  <div><kbd>B</kbd>flash sul beat on/off</div>
+  <div><kbd>Q</kbd>qualità / risoluzione (1x–2x)</div>
+  <div><kbd>H</kbd>mostra/nascondi info e comandi</div>
+</div>
+<div id="karaoke" hidden></div>
+<div id="toast"></div>
+<div id="start" hidden><div id="start-msg">Clicca per attivare il microfono</div></div>
+<script src="vendor/butterchurn.min.js"></script>
+<script src="vendor/butterchurnPresets.min.js"></script>
+<script src="vendor/butterchurnPresetsExtra.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

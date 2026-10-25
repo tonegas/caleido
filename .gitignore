@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+# generati
+scripts/recognize
+test/shots/
+test/*.wav
+# appunti personali
+da fare

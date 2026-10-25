@@ -1,0 +1,21 @@
+{
+  "name": "caleido",
+  "version": "1.0.0",
+  "description": "Visualizzatore musicale psichedelico a tutto schermo per feste (stile Winamp/Milkdrop)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "tv": "./Caleido.command",
+    "test": "node test/e2e.mjs"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "butterchurn": "^2.6.7",
+    "butterchurn-presets": "^2.4.7"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.16.0"
+  },
+  "license": "MIT",
+  "private": true
+}
