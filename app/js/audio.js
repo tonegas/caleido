@@ -1,4 +1,4 @@
-// Microphone audio analysis: log spectrum, bands, level, beats.
+// Audio analysis (microphone or system audio): log spectrum, bands, level, beats.
 // Every value is normalized with automatic gain control (AGC), so it works
 // both with loud music and with distant ambient sound.
 
@@ -14,6 +14,9 @@ export class AudioEngine {
     this.analyser = null;
     this.stream = null;
     this.deviceId = null;
+    this.kind = null;           // 'mic' | 'system'
+    this.detail = '';
+    this.onSourceLost = null;   // callback(reason) when the source stops by itself
 
     this.spectrum = new Uint8Array(SPEC_BINS);   // 0..255 for the texture
     this.wave = new Uint8Array(WAVE_LEN);
@@ -31,42 +34,106 @@ export class AudioEngine {
     this._beatTimes = [];
   }
 
-  async start(deviceId = null) {
+  // --- sources: microphone or the Mac's own audio output ("system") ---------------
+
+  async _context() {
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (this.ctx.state === 'suspended') await this.ctx.resume();
-    this.stop();
-    // No voice processing: echo/noise cancellation and AGC ruin music.
-    const audio = {
-      echoCancellation: false, noiseSuppression: false, autoGainControl: false,
-      channelCount: 1,
-    };
-    if (deviceId) audio.deviceId = { exact: deviceId };
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio, video: false });
-    this.deviceId = this.stream.getAudioTracks()[0]?.getSettings().deviceId || deviceId;
-    this.source = this.ctx.createMediaStreamSource(this.stream);
-    this.analyser = this.ctx.createAnalyser();
-    this.analyser.fftSize = 4096;
-    this.analyser.smoothingTimeConstant = 0.5;
-    this.analyser.minDecibels = -110;
-    this.analyser.maxDecibels = -10;
-    this.source.connect(this.analyser);
-    // muted output to the destination: makes sure the audio graph gets processed
-    if (!this._mute) { this._mute = this.ctx.createGain(); this._mute.gain.value = 0; this._mute.connect(this.ctx.destination); }
-    this.analyser.connect(this._mute);
-    this._freq = new Float32Array(this.analyser.frequencyBinCount);
-    this._time = new Float32Array(this.analyser.fftSize);
-    this._buildBins();
+    if (!this.analyser) {
+      // one analyser for the whole session; sources are swapped in front of it
+      this.analyser = this.ctx.createAnalyser();
+      this.analyser.fftSize = 4096;
+      this.analyser.smoothingTimeConstant = 0.5;
+      this.analyser.minDecibels = -110;
+      this.analyser.maxDecibels = -10;
+      // muted output to the destination: makes sure the audio graph gets processed
+      const mute = this.ctx.createGain();
+      mute.gain.value = 0;
+      this.analyser.connect(mute).connect(this.ctx.destination);
+      this._freq = new Float32Array(this.analyser.frequencyBinCount);
+      this._time = new Float32Array(this.analyser.fftSize);
+      this._buildBins();
+    }
+  }
+
+  _attach(node, kind, detail) {
+    node.connect(this.analyser);
+    this.source = node;
+    this.kind = kind;
+    this.detail = detail;
+    this._lastSound = performance.now();
     return this.label();
+  }
+
+  async startMic(deviceId = null) {
+    await this._context();
+    // No voice processing: echo/noise cancellation and AGC ruin music.
+    const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+    if (deviceId) audio.deviceId = { exact: deviceId };
+    const stream = await navigator.mediaDevices.getUserMedia({ audio, video: false });
+    this.stop();
+    this.stream = stream;
+    const track = stream.getAudioTracks()[0];
+    this.deviceId = track?.getSettings().deviceId || deviceId;
+    track?.addEventListener('ended', () => this.onSourceLost?.('microphone disconnected'));
+    return this._attach(this.ctx.createMediaStreamSource(stream), 'mic', track?.label || 'microphone');
+  }
+
+  async startSystem() {
+    await this._context();
+    if (!this._worklet) this._worklet = this.ctx.audioWorklet.addModule('js/pcm-worklet.js');
+    await this._worklet;
+    const abort = new AbortController();
+    const res = await fetch('/api/system-audio', { signal: abort.signal });
+    if (!res.ok) {
+      const why = await res.json().catch(() => ({}));
+      throw new Error(why.error || `system audio not available (${res.status})`);
+    }
+    this.stop();
+    this._abort = abort;
+    const node = new AudioWorkletNode(this.ctx, 'pcm-feed', { outputChannelCount: [1] });
+    node.port.postMessage(+res.headers.get('X-Sample-Rate') || 48000);
+    this._pump(res.body.getReader(), node, abort);
+    return this._attach(node, 'system', 'everything the Mac is playing');
+  }
+
+  // network chunks -> Float32 samples -> worklet (a chunk may split a sample in two)
+  async _pump(reader, node, abort) {
+    let rest = new Uint8Array(0);
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const bytes = new Uint8Array(rest.length + value.length);
+        bytes.set(rest); bytes.set(value, rest.length);
+        const n = bytes.length >> 2;
+        node.port.postMessage(new Float32Array(bytes.buffer.slice(0, n * 4)));
+        rest = bytes.slice(n * 4);
+      }
+    } catch { /* aborted */ }
+    if (!abort.signal.aborted) this.onSourceLost?.('system audio stream ended');
   }
 
   stop() {
     if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    if (this._abort) this._abort.abort();
     if (this.source) this.source.disconnect();
-    this.stream = null; this.source = null;
+    this.stream = null; this.source = null; this._abort = null;
+  }
+
+  /** Switches between microphone and system audio. */
+  toggleSource() {
+    return this.kind === 'system' ? this.startMic() : this.startSystem();
   }
 
   label() {
-    return this.stream?.getAudioTracks()[0]?.label || 'no input';
+    if (!this.source) return 'no input';
+    return this.kind === 'system' ? 'System audio' : `Microphone (${this.detail})`;
+  }
+
+  /** Seconds since the source last carried any sound (for the info panel). */
+  silentFor() {
+    return this.source ? (performance.now() - this._lastSound) / 1000 : 0;
   }
 
   async listInputs() {
@@ -74,11 +141,12 @@ export class AudioEngine {
     return devs.filter(d => d.kind === 'audioinput');
   }
 
-  async nextInput() {
+  /** Next microphone, when the Mac has more than one. */
+  async nextMic() {
     const ins = await this.listInputs();
-    if (ins.length < 2) return this.label();
     const i = ins.findIndex(d => d.deviceId === this.deviceId);
-    return this.start(ins[(i + 1) % ins.length].deviceId);
+    if (this.kind === 'mic' && ins.length < 2) return null;
+    return this.startMic(ins[(i + 1) % ins.length]?.deviceId);
   }
 
   // Logarithmic mapping 30 Hz .. 16 kHz -> SPEC_BINS bands.
@@ -143,6 +211,7 @@ export class AudioEngine {
       const s = this._time[i]; rms += s * s; if (Math.abs(s) > amax) amax = Math.abs(s);
     }
     rms = Math.sqrt(rms / this._time.length);
+    if (rms > 1e-4) this._lastSound = performance.now();
     let z = 0;
     for (let i = 1; i < this._time.length - WAVE_LEN; i++) {
       if (this._time[i - 1] < 0 && this._time[i] >= 0) { z = i; break; }

@@ -15,7 +15,9 @@ const PORT = 8799;
 const wav = process.argv[2] || path.join(dir, 'beat120.wav');
 if (!fs.existsSync(wav)) spawnSync('node', [path.join(dir, 'gen-wav.js'), wav, '60']);   // 120 BPM test track
 
-const server = spawn('node', [path.join(root, 'server.js')], { env: { ...process.env, PORT } });
+const server = spawn('node', [path.join(root, 'server.js')], {
+  env: { ...process.env, PORT, CALEIDO_SYSAUDIO_CMD: `node ${path.join(dir, 'fake-sysaudio.js')} ${wav} 4` },   // ends every 4 s
+});
 await new Promise(r => server.stdout.once('data', r));
 
 const browser = await puppeteer.launch({
@@ -51,6 +53,26 @@ try {
   check(st.specMax > 100, 'spectrum has signal');
   check(st.beats >= 8, `beats detected (${st.beats} in ~8s)`);
   check(Math.abs(st.bpm - 120) <= 6, `estimated tempo ${st.bpm} BPM (expected 120)`);
+
+  // --- audio source: I switches microphone <-> system audio (fake helper streams the test track) ---
+  const source = () => page.evaluate(() => {
+    const a = window.__party.audio;
+    return { kind: a.kind, label: a.label(), beats: a.beatCount, hud: document.getElementById('hud').textContent };
+  });
+  const mic = await source();
+  check(mic.kind === 'mic' && mic.hud.includes('Audio: Microphone'), `starts on the microphone, info panel says "${mic.hud.split('\n')[2]}"`);
+  let streams = 0;
+  page.on('request', r => { if (r.url().includes('/api/system-audio')) streams++; });
+  await page.keyboard.press('i');
+  await new Promise(r => setTimeout(r, 6000));
+  const sys = await source();
+  check(sys.kind === 'system' && streams >= 2, `system audio reconnects by itself when the stream ends (${streams} connections in ~6 s)`);
+  check(sys.kind === 'system' && sys.hud.includes('Audio: System audio'), `I switches to system audio, info panel says "${sys.hud.split('\n')[2]}"`);
+  check(sys.beats - mic.beats >= 6, `beats detected from system audio (${sys.beats - mic.beats} in ~6 s)`);
+  await page.keyboard.press('i');
+  await new Promise(r => setTimeout(r, 1000));
+  const back = await source();
+  check(back.kind === 'mic', `I again goes back to the microphone (${back.label})`);
 
   // average brightness of the visible canvas
   const brightness = () => page.evaluate(() => {

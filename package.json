@@ -1,6 +1,6 @@
 {
   "name": "caleido",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Psychedelic full-screen music visualizer for parties (Winamp/Milkdrop style) with karaoke mode",
   "main": "server.js",
   "scripts": {

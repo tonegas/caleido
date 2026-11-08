@@ -16,6 +16,8 @@
   <key>NSHumanReadableCopyright</key><string>MIT License</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Caleido listens to the music in the room to animate the visuals in time with it.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Caleido can animate the visuals with the audio the Mac is playing (press I to switch from the microphone).</string>
   <key>NSAppleEventsUsageDescription</key>
   <string>Caleido reads the song playing in Spotify or Music to show synced karaoke lyrics.</string>
   <key>NSAppTransportSecurity</key>

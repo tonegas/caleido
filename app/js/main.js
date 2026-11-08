@@ -69,18 +69,49 @@ function nextPreset() {
   say(`Milkdrop: ${state.presetName}`);
 }
 
+// audio source: microphone by default, system audio on request (key I, or ?source=system)
+async function useSource(start) {
+  const label = await start();
+  state.running = true;
+  if (md) md.connect(audio.source);
+  say(`Audio: ${label}`);
+}
+
 async function startAudio() {
   try {
-    const label = await audio.start();
+    if (params.get('source') === 'system') {
+      try { return await useSource(() => audio.startSystem()); }
+      catch (e) { say(`System audio not available: ${e.message}`); }
+    }
+    await useSource(() => audio.startMic());
     start.hidden = true;
-    state.running = true;
-    if (md) md.connect(audio.source);
-    say(`Microphone: ${label}`);
   } catch (e) {
     start.hidden = false;
     $('start-msg').textContent = `Microphone not available (${e.name}). Click to retry and allow access.`;
   }
 }
+
+async function switchSource(next) {
+  try {
+    await useSource(next);
+  } catch (e) {
+    say(`${audio.kind === 'system' ? 'Microphone' : 'System audio'} not available: ${e.message}`);
+  }
+}
+
+// the source stopped by itself (helper ended, output device changed, mic unplugged):
+// reconnect system audio up to 3 times in a row, otherwise fall back to the microphone
+let reconnects = [];
+audio.onSourceLost = async reason => {
+  const now = performance.now();
+  reconnects = reconnects.filter(t => now - t < 30000);
+  if (audio.kind === 'system' && reconnects.length < 3) {
+    reconnects.push(now);
+    try { await audio.startSystem(); if (md) md.connect(audio.source); return; } catch { /* fall back below */ }
+  }
+  say(`Audio: ${reason}, back to the microphone`);
+  switchSource(() => audio.startMic());
+};
 
 function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
@@ -99,7 +130,8 @@ window.addEventListener('keydown', async e => {
   else if (k === 'b' || k === 'B') { state.flash = state.flash ? 0 : 1; say(`Beat flash: ${state.flash ? 'ON' : 'OFF'}`); }
   else if (k === 'ArrowUp') { audio.sensitivity = Math.min(3, audio.sensitivity + 0.1); say(`Sensitivity: ${audio.sensitivity.toFixed(1)}`); }
   else if (k === 'ArrowDown') { audio.sensitivity = Math.max(0.4, audio.sensitivity - 0.1); say(`Sensitivity: ${audio.sensitivity.toFixed(1)}`); }
-  else if (k === 'i' || k === 'I') { const l = await audio.nextInput(); if (md) md.connect(audio.source); say(`Input: ${l}`); }
+  else if (k === 'I') switchSource(async () => (await audio.nextMic()) ?? audio.label());
+  else if (k === 'i') switchSource(() => audio.toggleSource());
   else if (k === 'k' || k === 'K') say(`Karaoke: ${karaoke.toggle() ? 'ON' : 'OFF'}`);
   else if (k === '[') karaoke.nudge(-0.25);
   else if (k === ']') karaoke.nudge(0.25);
@@ -184,7 +216,10 @@ function frame(now) {
       `${state.mode === 'milkdrop' ? 'Milkdrop: ' + state.presetName : 'Scene: ' + SCENE_NAMES[state.scene]}  ` +
       `| symmetry ${state.sym} | ${audio.bpm || '--'} BPM | ${state.fps.toFixed(0)} fps ${viz.quality}x | auto ${state.auto ? 'on' : 'off'}\n` +
       `bass  ${bar(audio.bass)}  mid ${bar(audio.mid)}  treble ${bar(audio.treble)}  volume ${bar(audio.level)}  ` +
-      `${audio.beat > 0.5 ? '● BEAT' : ''}`;
+      `${audio.beat > 0.5 ? '● BEAT' : ''}\n` +
+      `Audio: ${audio.label()}  ·  I: switch to ${audio.kind === 'system' ? 'microphone' : 'system audio'}` +
+      (audio.silentFor() > 5 ? `  ·  ⚠ no sound for ${Math.floor(audio.silentFor())} s` +
+        (audio.kind === 'system' ? ' (is the Mac playing? check System Audio Recording permission)' : '') : '');
   }
   requestAnimationFrame(frame);
 }

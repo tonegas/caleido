@@ -1,7 +1,8 @@
 // Caleido.app: native macOS wrapper around the web visualizer.
 // - serves the page (Contents/Resources/app) from a tiny HTTP server on 127.0.0.1,
 //   so the page is a "secure context" and may use the microphone
-// - implements the karaoke API (/api/nowplaying, /api/recognize) like server.js
+// - implements the karaoke API (/api/nowplaying, /api/recognize) and the system audio
+//   stream (/api/system-audio) like server.js
 // - opens a full-screen WebKit window on the external display (the TV) if there is one
 // - keeps the display awake while running
 import AppKit
@@ -122,10 +123,65 @@ final class LocalServer {
       let parts = head.split(separator: " ")
       let target = parts.count > 1 ? String(parts[1]) : "/"
       let path = (target.components(separatedBy: "?").first ?? "/").removingPercentEncoding ?? "/"
+      if path == "/api/system-audio" { return self.streamSystemAudio(conn) }
       let (status, type, body) = self.respond(path)
       var header = "HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\n"
       header += "Cache-Control: no-cache\r\nConnection: close\r\n\r\n"
       conn.send(content: Data(header.utf8) + body, completion: .contentProcessed { _ in conn.cancel() })
+    }
+  }
+
+  /// Streams the Mac's own audio from the bundled helper (scripts/sysaudio.swift):
+  /// "RATE <n>\n" becomes the X-Sample-Rate header, the samples become the body.
+  /// The helper is stopped as soon as the page disconnects.
+  private func streamSystemAudio(_ conn: NWConnection) {
+    let fail = { (msg: String) in
+      let body = json(["error": msg])
+      let header = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
+      conn.send(content: Data(header.utf8) + body, completion: .contentProcessed { _ in conn.cancel() })
+    }
+    guard let helper = Bundle.main.url(forResource: "sysaudio", withExtension: nil) else {
+      return fail("system audio helper not available")
+    }
+    let p = Process()
+    p.executableURL = helper
+    let out = Pipe()
+    p.standardOutput = out
+    p.standardError = FileHandle.nullDevice
+    do { try p.run() } catch { return fail("system audio helper not available") }
+
+    let lock = NSLock()
+    var head = Data(), started = false, closed = false
+    let stop = {
+      lock.lock(); defer { lock.unlock() }
+      if closed { return }
+      closed = true
+      out.fileHandleForReading.readabilityHandler = nil
+      if p.isRunning { p.terminate() }
+      conn.cancel()
+    }
+    conn.stateUpdateHandler = { state in
+      switch state { case .failed, .cancelled: stop(); default: break }
+    }
+    out.fileHandleForReading.readabilityHandler = { h in
+      let chunk = h.availableData
+      if chunk.isEmpty { return stop() }   // helper ended
+      if started {
+        conn.send(content: chunk, completion: .contentProcessed { if $0 != nil { stop() } })
+        return
+      }
+      head.append(chunk)
+      guard let nl = head.firstIndex(of: 10) else { return }
+      let line = String(data: head[..<nl], encoding: .utf8) ?? ""
+      guard line.hasPrefix("RATE ") else {
+        out.fileHandleForReading.readabilityHandler = nil
+        p.terminate()
+        return fail(line.replacingOccurrences(of: "ERROR ", with: ""))
+      }
+      started = true
+      let header = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nX-Sample-Rate: \(line.dropFirst(5))\r\n"
+        + "Cache-Control: no-cache\r\nConnection: close\r\n\r\n"
+      conn.send(content: Data(header.utf8) + head[(nl + 1)...], completion: .contentProcessed { if $0 != nil { stop() } })
     }
   }
 

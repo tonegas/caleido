@@ -17,6 +17,7 @@ the old Winamp visualizers. It also has a karaoke mode that shows the song's lyr
 
 - **Reacts to the sound in the room**: no cables to your sound system, the Mac's microphone is
   enough. Gain adjusts itself, so it works with loud music and with quiet background music.
+  Press `I` to follow the Mac's own audio instead (Spotify, YouTube, …), straight from the source.
 - **Frequency and volume drive different zones**: the bass moves the center and the zoom,
   frequencies color the rings and slices, and volume sets speed and brightness.
 - **Stays on the beat**: it detects beats and estimates BPM. Colors jump on every hit,
@@ -98,12 +99,28 @@ from a frame of the Mandala scene (needs Chrome and `npm install`).
 | `[` / `]` | karaoke: lyrics 0.25 s earlier / later |
 | `A` | automatic scene changes on/off |
 | `↑` / `↓` | microphone sensitivity |
-| `I` | switch audio input |
+| `I` | audio source: microphone ↔ system audio (what the Mac is playing) |
+| `Shift+I` | next microphone, if the Mac has more than one |
 | `B` | beat flash on/off |
 | `Q` | quality 1x–2x (2x by default, lowered automatically if the Mac struggles) |
 | `H` | show/hide info (BPM, levels, fps) and the list of controls |
 | `Cmd+Ctrl+F` | app: leave/enter full screen |
 | `Cmd+D` | app: move to the next display |
+
+## Audio source
+
+Caleido starts with the **microphone**, which hears whatever plays in the room.
+Press **`I`** to switch to **system audio**: Caleido then listens to everything the Mac itself is
+playing (Spotify, Apple Music, YouTube in the browser…) directly, without the microphone. Press `I`
+again to go back. Press `H` to see the current source in the info panel.
+
+- System audio needs **macOS 14.2 or later**. The first time, macOS asks for permission to record
+  system audio: allow it (System Settings → Privacy & Security → Screen & System Audio Recording).
+- It works whether the sound comes out of the Mac's speakers, the TV (HDMI/AirPlay) or headphones.
+- When the Mac is quiet, the info panel shows "no sound"; if it stays silent while music is playing,
+  check the permission above.
+- If the system audio stream stops (for example when you switch audio output), Caleido reconnects by
+  itself; if that keeps failing, it goes back to the microphone.
 
 ## Karaoke
 
@@ -131,16 +148,18 @@ to play the music from Spotify or Apple Music instead.
 - Use the TV as an **extended display** (System Settings → Displays) at its highest resolution.
 - If the picture looks soft or grainy, check the TV's picture settings: set the HDMI input to
   **PC** mode, the aspect ratio to **Original/Just Scan**, low sharpness, and noise reduction off.
-- Want a clean audio signal instead of the microphone? Install
-  [BlackHole](https://existential.audio/blackhole/) and select it with the `I` key.
+- Music playing from the Mac itself? Press `I` to use the system audio instead of the microphone:
+  a clean signal, unaffected by people talking.
 
 ## How it works
 
 Caleido is a web page. The Mac app shows it in a WebKit window and serves it from a tiny built-in
 HTTP server; when running from source, a small Node server with no dependencies does the same.
 
-- `app/js/audio.js`: microphone analysis (log spectrum, bands, automatic gain control, beat and
-  BPM detection).
+- `app/js/audio.js`: audio analysis (log spectrum, bands, automatic gain control, beat and BPM
+  detection) and the two sources, microphone and system audio.
+- `scripts/sysaudio.swift`: captures the Mac's audio output with a Core Audio process tap and
+  streams it to the page (through `app/js/pcm-worklet.js`).
 - `app/js/shaders.js`: the scenes, written in GLSL. Each frame warps the previous one (zoom,
   rotation) to create the psychedelic trails.
 - `app/js/visualizer.js`: WebGL2 rendering with feedback and supersampling.
